@@ -1,0 +1,6 @@
+interface:
+  display_name: "研究日报出版台"
+  short_description: "跨领域图文研究日报、基线评价、趋势记忆与预测复盘，保留可回查证据"
+  default_prompt: "使用 $research-newspaper：出版一下今天的报纸。"
+policy:
+  allow_implicit_invocation: true

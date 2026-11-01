@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.test-output/
+newspapers/
+*.sqlite3
+*.sqlite3-*
+.env
+.env.*
+!.env.example
