@@ -26,6 +26,8 @@ def connect(path=DB):
       CREATE TABLE IF NOT EXISTS snapshots (
         digest TEXT PRIMARY KEY, as_of TEXT NOT NULL, recorded_at TEXT NOT NULL,
         origin TEXT NOT NULL, payload TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS build_state (
+        name TEXT PRIMARY KEY, digest TEXT NOT NULL REFERENCES snapshots(digest));
       CREATE TRIGGER IF NOT EXISTS revisions_no_update BEFORE UPDATE ON revisions
         BEGIN SELECT RAISE(ABORT,'Research history is append-only'); END;
       CREATE TRIGGER IF NOT EXISTS revisions_no_delete BEFORE DELETE ON revisions
@@ -57,6 +59,14 @@ def snapshot(db, payload, origin):
     digest = hashlib.sha256(raw.encode()).hexdigest()
     db.execute('INSERT OR IGNORE INTO snapshots VALUES (?,?,?,?,?)',
                (digest, payload['asOf'], datetime.now(timezone.utc).isoformat(), origin, raw))
+    return digest
+
+
+def current_snapshot(db):
+    row = db.execute("SELECT s.payload FROM snapshots s JOIN build_state b ON b.digest=s.digest WHERE b.name='current build'").fetchone()
+    if row is None:  # Existing newspapers acquire the pointer on their next build.
+        row = db.execute("SELECT payload FROM snapshots WHERE origin='current build' ORDER BY recorded_at DESC LIMIT 1").fetchone()
+    return row
 
 
 def validate_journal(catalog, journal):
@@ -102,7 +112,8 @@ def sync(catalog, editions, reviews, journal, taxonomy):
         for kind, key in [('statement', 'statements'), ('forecast', 'forecasts'), ('evaluation', 'evaluations')]:
             for record in journal[key]:
                 append(db, kind, record['id'], record, immutable=True)
-        snapshot(db, dict(asOf=catalog['asOf'], catalog=catalog, editions=editions, reviews=reviews, journal=journal, taxonomy=taxonomy), 'current build')
+        digest = snapshot(db, dict(asOf=catalog['asOf'], catalog=catalog, editions=editions, reviews=reviews, journal=journal, taxonomy=taxonomy), 'current build')
+        db.execute("INSERT INTO build_state VALUES ('current build',?) ON CONFLICT(name) DO UPDATE SET digest=excluded.digest", (digest,))
         return dict(backend='SQLite', revisions=db.execute('SELECT COUNT(*) FROM revisions').fetchone()[0], snapshots=db.execute('SELECT COUNT(*) FROM snapshots').fetchone()[0], firstRegisteredOn=journal['startedOn'])
 
 

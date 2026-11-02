@@ -1,14 +1,16 @@
 'use strict';
 let RESEARCH=JSON.parse(document.getElementById('analysisData').textContent);
+let workView;
+let lastFocus=null;
 const el=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const href=u=>{try{const p=new URL(u);return p.protocol==='https:'?esc(p.href):'#'}catch{return '#'}};
-const chip=t=>`<span class="pill">${esc(t)}</span>`;
 const list=a=>`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
 const metric=(n,t)=>`<div><strong>${esc(n)}</strong><span>${esc(t)}</span></div>`;
 function workLink(id){const w=RESEARCH.catalog.works.find(x=>x.id===id);return w?`<a class="evidence-link" href="statistics.html#${encodeURIComponent(id)}">${esc(w.short)} ↗</a>`:''}
 function select(id,values){const previous=el(id).value;el(id).innerHTML='<option value="all">全部</option>'+values.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');if(values.includes(previous))el(id).value=previous}
 function initialize(){
  const d=RESEARCH.catalog,t=RESEARCH.taxonomy;
+ workView=createWorkView(d,RESEARCH.reviews,()=>d.asOf);
  select('modelFilter',t.model);select('typeFilter',t.workType);select('bodyFilter',t.embodiment);select('topicFilter',[...new Set(d.works.flatMap(w=>w.tags))]);
  el('asof').textContent=`截至 ${d.asOf} / ${d.timezone}`;
  renderStats();renderTrends();
@@ -17,18 +19,16 @@ function renderBars(id,key,works){const values=RESEARCH.taxonomy[key];el(id).inn
 function renderStats(){
  const d=RESEARCH.catalog,q=el('researchSearch').value.trim().toLowerCase(),period=el('periodFilter').value;
  const filters=[['modelFilter','model'],['typeFilter','workType'],['bodyFilter','embodiment']];
- const works=d.works.filter(w=>filters.every(([id,key])=>el(id).value==='all'||w.classification[key].includes(el(id).value))&&(el('topicFilter').value==='all'||w.tags.includes(el('topicFilter').value))&&(period==='all'||(!w.datePrecision&&(Date.parse(d.asOf)-Date.parse(w.date))/86400000<Number(period)))&&[w.short,w.title,w.summary,RESEARCH.reviews[w.id].abstractZh,...w.orgIds.map(id=>d.organizations.find(o=>o.id===id)?.short||''),...RESEARCH.reviews[w.id].baselines.map(b=>b.name)].join(' ').toLowerCase().includes(q)).sort((a,b)=>b.date.localeCompare(a.date)||a.short.localeCompare(b.short));
+ const works=d.works.filter(w=>filters.every(([id,key])=>el(id).value==='all'||w.classification[key].includes(el(id).value))&&(el('topicFilter').value==='all'||w.tags.includes(el('topicFilter').value))&&(period==='all'||(!w.datePrecision&&(Date.parse(d.asOf)-Date.parse(w.date))/86400000<Number(period)))&&[w.short,w.title,w.summary,RESEARCH.reviews[w.id].abstract.translationZh||'',RESEARCH.reviews[w.id].editorialSummaryZh,...w.orgIds.map(id=>d.organizations.find(o=>o.id===id)?.short||''),...RESEARCH.reviews[w.id].baselines.map(b=>b.name)].join(' ').toLowerCase().includes(q)).sort((a,b)=>b.date.localeCompare(a.date)||a.short.localeCompare(b.short));
  const full=works.filter(w=>RESEARCH.reviews[w.id].depth==='全文核验').length;
  el('statsMetrics').innerHTML=metric(works.length,'当前筛选工作')+metric(d.works.length,'累计去重工作')+metric(full,'当前筛选已核全文')+metric(RESEARCH.editions.length,'期历史调研');
  renderBars('modelBars','model',works);renderBars('typeBars','workType',works);
- el('resultCount').textContent=`${works.length} 项结果 · 摘要为中文转述 · 评价是有依据的编辑判断`;
- el('reviewList').innerHTML=works.length?works.map(w=>renderReview(w,RESEARCH.reviews[w.id])).join(''):'<div class="empty">没有符合这些条件的已收录工作。</div>';
+ el('resultCount').textContent=`${works.length} 项结果 · 论文摘要为原文全译 · 评价是有依据的编辑判断`;
+ el('reviewList').innerHTML=works.length?works.map(w=>workView.card(w)).join(''):'<div class="empty">没有符合这些条件的已收录工作。</div>';
 }
-function renderReview(w,r){
- const c=w.classification;
- const baselineRows=r.baselines.map(b=>`<tr><td>${esc(b.name)}</td><td>${esc(b.setting)}</td><td>${esc(b.result)}</td><td><a href="${href(b.sourceUrl)}" target="_blank" rel="noopener noreferrer">原始依据 ↗</a></td></tr>`).join('')||'<tr><td colspan="4">本次核验未找到可报告的统一对照基线；产品公告或数据管线不据演示认定性能胜出。具体证据范围见下方来源。</td></tr>';
- return `<article id="${esc(w.id)}" class="review-item"><div class="meta">${esc(w.date)} · ${esc(w.dateType)} · <span class="status">${esc(r.depth)}</span> · 核验 ${esc(r.reviewedAt)}</div><h2>${esc(w.short)} · ${esc(w.headline)}</h2><div class="review-tags">${c.model.map(chip).join('')}${c.workType.map(chip).join('')}${c.embodiment.map(chip).join('')}</div><p class="analysis-note">${esc(w.title)}<br>分类依据：${esc(c.basis)}</p><p class="review-abstract"><strong>摘要：</strong>${esc(r.abstractZh)}</p><div class="review-judgment"><p><strong>实际价值：</strong>${esc(r.verdict)}</p><p><strong>结论与结果：</strong>${esc(r.resultSummary)}</p></div><details><summary>展开基线、实验条件与提升归因</summary><h3>比较了哪些基线？</h3><div class="review-table-wrap"><table class="review-table"><thead><tr><th>基线 / 对照</th><th>比较设置</th><th>结果与口径</th><th>出处</th></tr></thead><tbody>${baselineRows}</tbody></table></div><h3>哪些条件会影响比较？</h3>${r.conditions.map(x=>`<p><strong>${esc(x.factor)}：</strong>${esc(x.observation)}<br><span class="analysis-note">影响：${esc(x.impact)}</span></p>`).join('')}<h3>为什么基线落后，或为什么不能说落后？</h3><p>${esc(r.bestBaselineReason)}</p><div class="callout"><p><strong>主要提升来源 / ${esc(r.attribution.confidence)}：</strong>${esc(r.attribution.main)}</p><p><strong>支持证据：</strong>${esc(r.attribution.evidence)}</p><p><strong>尚不能归因：</strong>${esc(r.attribution.unresolved)}</p></div><h3>成本与复用限制</h3><p>${esc(r.cost)}</p><p>${esc(w.limits)}</p><h3>可回查的依据</h3><div class="source-provenance">${r.sources.map(s=>`<p><a href="${href(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.label)} ↗</a><br><span class="analysis-note">定位：${esc(s.locator)}</span></p>`).join('')}</div><p class="analysis-note">“额外条件”不等于作弊；未报告不等于未做。没有同条件实验时不把数据、架构、领域适配的作用强行分成百分比。${esc(r.depth)}表示本次实际审读范围，不代表独立复现。</p></details></article>`;
-}
+function showWork(id){const html=workView.detail(id);if(!html)return;if(!el('detailDialog').open)lastFocus=document.activeElement;el('detailBody').innerHTML=html;el('dialogLabel').textContent='RESEARCH NOTE / '+RESEARCH.catalog.works.find(w=>w.id===id).short;if(!el('detailDialog').open)el('detailDialog').showModal();el('detailDialog').scrollTop=0}
+document.addEventListener('click',e=>{const w=e.target.closest('[data-work]');if(w){showWork(w.dataset.work);return}const p=e.target.closest('[data-profile]');if(p){location.href='index.html#org-'+encodeURIComponent(p.dataset.profile);return}const t=e.target.closest('[data-tech]');if(t)location.href='technologies.html#tech-'+encodeURIComponent(t.dataset.tech)});
+el('closeDialog').addEventListener('click',()=>el('detailDialog').close());el('detailDialog').addEventListener('close',()=>lastFocus?.focus());el('detailDialog').addEventListener('click',e=>{if(e.target===el('detailDialog')){const r=el('detailDialog').getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)el('detailDialog').close()}});
 function renderTrends(){
  const j=RESEARCH.journal;
  const latest=new Map();for(const s of j.statements)latest.set(s.topicId,s);
@@ -59,7 +59,7 @@ initialize();
 function showConnection(text){el('connectionState').textContent=text;el('trendConnection').textContent=text}
 showConnection('离线阅读快照 · 数据和判断已保存在本地 SQLite；最新收录截至 '+RESEARCH.catalog.asOf);
 if(location.protocol==='http:'&&['127.0.0.1','localhost'].includes(location.hostname)){
- fetch('/api/research').then(r=>{if(!r.ok)throw Error('Unavailable');return r.json()}).then(data=>{if(!data.catalog||!data.reviews||!data.journal||!data.taxonomy)throw Error('Incomplete');RESEARCH={...RESEARCH,...data};initialize();showConnection('已连接本地 SQLite · 读取最新构建快照 · 截至 '+RESEARCH.catalog.asOf);jumpToWork()}).catch(()=>showConnection('当前为页面内快照 · 本地数据库接口未连接；可正常阅读已生成内容')).finally(()=>fetch('/api/history').then(r=>r.ok?r.json():null).then(h=>{if(h)el('memoryHistory').innerHTML+=`<p>${h.snapshots.map(s=>`${esc(s.as_of)} · ${esc(s.origin)} · 写入 ${esc(s.recorded_at)}<br>`).join('')}</p>`}).catch(()=>{}));
+ fetch('/api/research').then(r=>{if(!r.ok)throw Error('Unavailable');return r.json()}).then(data=>{if(!data.catalog||!data.reviews||!data.journal||!data.taxonomy)throw Error('Incomplete');const images=new Map(RESEARCH.catalog.works.map(w=>[w.id,w.image]));for(const w of data.catalog.works){const saved=images.get(w.id);if(saved?.local===w.image?.local&&saved?.src)w.image={...w.image,src:saved.src}}RESEARCH={...RESEARCH,...data};initialize();showConnection('已连接本地 SQLite · 读取最新构建快照 · 截至 '+RESEARCH.catalog.asOf);jumpToWork()}).catch(()=>showConnection('当前为页面内快照 · 本地数据库接口未连接；可正常阅读已生成内容')).finally(()=>fetch('/api/history').then(r=>r.ok?r.json():null).then(h=>{if(h)el('memoryHistory').innerHTML+=`<p>${h.snapshots.map(s=>`${esc(s.as_of)} · ${esc(s.origin)} · 写入 ${esc(s.recorded_at)}<br>`).join('')}</p>`}).catch(()=>{}));
 }
-function jumpToWork(){const id=decodeURIComponent(location.hash.slice(1));if(id&&el(id))el(id).scrollIntoView({block:'start'})}
+function jumpToWork(){const id=decodeURIComponent(location.hash.slice(1));if(id&&RESEARCH.catalog.works.some(w=>w.id===id))showWork(id)}
 window.addEventListener('hashchange',jumpToWork);jumpToWork();

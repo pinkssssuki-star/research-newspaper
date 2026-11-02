@@ -5,7 +5,7 @@ import sys
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
-from research_store import ROOT, connect, history_payload
+from research_store import ROOT, connect, current_snapshot, history_payload
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -15,7 +15,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(history_payload())
         if path == '/api/research':
             with connect() as db:
-                row = db.execute("SELECT payload FROM snapshots WHERE origin='current build' ORDER BY recorded_at DESC LIMIT 1").fetchone()
+                row = current_snapshot(db)
                 if row:
                     return self.send_json(json.loads(row['payload']))
             return self.send_error(503, 'Run build.py first')

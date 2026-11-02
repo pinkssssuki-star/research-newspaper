@@ -2,6 +2,8 @@
 
 ## Fair review
 
+Translate the paper's original Abstract in full, with a versioned source and the original text available for comparison. Keep author claims, original-Abstract translation, brief card description and editorial explanation distinct. Check official release pages for companion papers; explicitly mark missing or inaccessible Abstracts. Never pass a paraphrase off as the paper's Abstract. See the data contract for fields and legacy migration.
+
 Separate established observation, author-reported result and editorial inference. State the practical problem and the users/tasks for which the contribution helps. Do not assign a universal usefulness score.
 
 For each meaningful comparator record its exact version, task/split, metric and direction, input/tool privileges, training/adaptation budget, evaluation budget, sample count and source table/section when disclosed. Report “not disclosed/not verified” instead of completing missing information from intuition. Product announcements may have no controlled baselines; empty baseline lists are valid.
@@ -11,6 +13,8 @@ Record which conditions explain differences: data scale/quality/diversity, domai
 Explain why the strongest relevant comparator trails, ties or wins, including negative results and trade-offs. Matched ablations support local causality; a cross-paper leaderboard usually cannot separate architecture, data and budget. Never fabricate percentage attribution. Distinguish improvements in success, safety, cost and deployability. A safety method can be useful while slower or less successful; a dataset can help without a new architecture.
 
 Reading depth must reflect actual access: full-paper review, official material/selected tables, or abstract/method-only. None means independent reproduction. Quote sparingly, respect source licences and cite original sources near claims.
+
+Put this review in the daily work-detail dialog along with the Abstract translation and source text. Reuse that card/detail component in statistics, including figures, sources and organization/technology entry points. Statistics filters and charts are additional navigation, not the sole place where readers can assess an individual work. Report practical usefulness and the dominant plausible reason for baseline differences without inventing a trick count, numerical attribution or unfairness unsupported by controls.
 
 ## Trends versus forecasts
 
